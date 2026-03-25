@@ -53,6 +53,30 @@ Windows CLI / IDE
 - 支持旧版 WSL fallback 执行模式
 - 支持调试日志，便于排查参数转换和调用链问题
 
+## Recommended Install for Windows
+
+如果你是在 Windows 上安装，推荐直接执行：
+
+```powershell
+go install github.com/fengwk/wslgit-for-windows/cmd/git@latest
+```
+
+安装完成后，通常可执行文件会位于：
+
+- `%USERPROFILE%\go\bin\git.exe`
+
+如果安装后执行 `git` 提示找不到命令，请将下面目录加入 Windows 的 `PATH`：
+
+- `%USERPROFILE%\go\bin`
+
+前提条件：
+
+- Windows 已安装 Go
+- Windows 已安装并启用 WSL
+- WSL 发行版中已经安装 `git`
+
+如果 `go install` 无法拉取模块，再使用下方的源码构建方式。
+
 ## Build
 
 在 WSL 中构建 Windows 可执行文件：
@@ -70,7 +94,12 @@ GOOS=windows GOARCH=arm64 go build -o bin/git.exe ./cmd/git
 
 ## Installation
 
-推荐按下面步骤安装：
+推荐顺序：
+
+1. 优先使用上面的 Windows 一键安装命令
+2. 如果 `go install` 失败，再使用源码构建安装
+
+### 源码构建安装
 
 1. 在 WSL 中构建 `git.exe`
 2. 将生成的 `bin/git.exe` 复制到 Windows 目录，例如：
@@ -78,6 +107,14 @@ GOOS=windows GOARCH=arm64 go build -o bin/git.exe ./cmd/git
 3. 将该目录加入 Windows `PATH`
 4. 确保该目录优先级高于 Git for Windows
 5. 先验证 CLI 和 IDE 行为正常，再决定是否卸载 Git for Windows
+
+构建示例：
+
+```bash
+cd /home/fengwk/proj/wslgit-for-windows
+mkdir -p /mnt/c/tools/wslgit
+GOOS=windows GOARCH=amd64 go build -o /mnt/c/tools/wslgit/git.exe ./cmd/git
+```
 
 示例：
 
@@ -102,6 +139,8 @@ git fetch
 只要当前仓库位于本机盘符路径下，实际执行命令的将是 WSL 内的 Git。
 
 ## Environment Variables
+
+这些环境变量都是可选的高级配置，正常安装和日常使用通常不需要设置。
 
 - `WSLGIT_DEBUG=1`
   - 开启调试日志
