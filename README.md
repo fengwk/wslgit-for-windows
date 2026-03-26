@@ -50,6 +50,7 @@ Windows CLI / IDE
 - 使用 WSL 中的 Git 处理真实仓库状态
 - 兼容 Windows `cmd.exe`、PowerShell 和大多数 IDE 的 Git 调用方式
 - 支持本机盘符路径，例如 `C:\repo`、`D:\work\app`
+- 支持映射到 `\\wsl$` / `\\wsl.localhost` 的 Windows 盘符路径
 - 支持旧版 WSL fallback 执行模式
 - 支持调试日志，便于排查参数转换和调用链问题
 
@@ -136,7 +137,7 @@ git commit
 git fetch
 ```
 
-只要当前仓库位于本机盘符路径下，实际执行命令的将是 WSL 内的 Git。
+只要当前仓库位于本机盘符路径下，或位于映射到 `\\wsl$` / `\\wsl.localhost` 的盘符路径下，实际执行命令的将是 WSL 内的 Git。
 
 ## Environment Variables
 
@@ -175,8 +176,10 @@ git fetch
 
 当前版本的已知边界和风险如下：
 
-1. 只保证本机盘符路径
-   - 暂不支持 UNC / 网络共享路径
+1. 路径支持范围有限
+   - 支持本机盘符路径
+   - 支持映射到 `\\wsl$` / `\\wsl.localhost` 的盘符路径
+   - 暂不支持其他 UNC / 网络共享路径
    - 暂不支持非常规自定义挂载路径
 
 2. 不完整替代 Git for Windows 附带生态

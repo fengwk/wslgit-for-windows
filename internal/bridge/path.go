@@ -7,8 +7,17 @@ import (
 	"unicode"
 )
 
+type PathTranslation struct {
+	WSLPath string
+	Distro  string
+}
+
 type PathChecker interface {
 	Exists(path string) bool
+}
+
+type DriveRemoteResolver interface {
+	Resolve(drive string) (string, bool, error)
 }
 
 type OSPathChecker struct{}
@@ -19,21 +28,43 @@ func (OSPathChecker) Exists(path string) bool {
 }
 
 func WindowsPathToWSL(path string) (string, error) {
+	translation, err := ResolvePathTranslation(path)
+	if err != nil {
+		return "", err
+	}
+	return translation.WSLPath, nil
+}
+
+func ResolvePathTranslation(path string) (PathTranslation, error) {
+	return resolvePathTranslation(path, defaultDriveRemoteResolver)
+}
+
+func resolvePathTranslation(path string, resolver DriveRemoteResolver) (PathTranslation, error) {
+	if translation, ok := parseWSLUNCPath(path); ok {
+		return translation, nil
+	}
+
 	if isWindowsDrivePath(path) {
+		if translation, ok, err := resolveMappedDrivePath(path, resolver); err != nil {
+			return PathTranslation{}, err
+		} else if ok {
+			return translation, nil
+		}
+
 		drive := unicode.ToLower(rune(path[0]))
 		rest := strings.ReplaceAll(path[2:], "\\", "/")
 		rest = strings.TrimPrefix(rest, "/")
 		if rest == "" {
-			return fmt.Sprintf("/mnt/%c", drive), nil
+			return PathTranslation{WSLPath: fmt.Sprintf("/mnt/%c", drive)}, nil
 		}
-		return fmt.Sprintf("/mnt/%c/%s", drive, rest), nil
+		return PathTranslation{WSLPath: fmt.Sprintf("/mnt/%c/%s", drive, rest)}, nil
 	}
 
 	if isUNCPath(path) {
-		return "", fmt.Errorf("UNC 路径暂不支持: %s", path)
+		return PathTranslation{}, fmt.Errorf("UNC 路径暂不支持: %s", path)
 	}
 
-	return "", fmt.Errorf("不是 Windows 本机盘符路径: %s", path)
+	return PathTranslation{}, fmt.Errorf("不是 Windows 本机盘符路径: %s", path)
 }
 
 func RewriteArgs(args []string, cwd string, checker PathChecker) []string {
@@ -156,4 +187,64 @@ func joinWindowsPath(base string, child string) string {
 		return base
 	}
 	return base + "\\" + child
+}
+
+func resolveMappedDrivePath(path string, resolver DriveRemoteResolver) (PathTranslation, bool, error) {
+	if resolver == nil {
+		return PathTranslation{}, false, nil
+	}
+
+	drive := strings.ToUpper(path[:2])
+	remoteRoot, ok, err := resolver.Resolve(drive)
+	if err != nil {
+		return PathTranslation{}, false, err
+	}
+	if !ok {
+		return PathTranslation{}, false, nil
+	}
+
+	relativePath := strings.TrimLeft(path[2:], `\\/`)
+	remotePath := remoteRoot
+	if relativePath != "" {
+		remotePath = joinWindowsPath(remoteRoot, relativePath)
+	}
+
+	translation, matched := parseWSLUNCPath(remotePath)
+	if matched {
+		return translation, true, nil
+	}
+
+	return PathTranslation{}, false, fmt.Errorf("不支持的映射盘 %s，当前仅支持映射到 \\\\wsl$ 或 \\\\wsl.localhost 的盘符", drive)
+}
+
+func parseWSLUNCPath(path string) (PathTranslation, bool) {
+	if !isUNCPath(path) {
+		return PathTranslation{}, false
+	}
+
+	normalized := strings.ReplaceAll(path, "/", "\\")
+	normalized = strings.TrimLeft(normalized, "\\")
+	parts := strings.Split(normalized, "\\")
+	if len(parts) < 2 {
+		return PathTranslation{}, false
+	}
+
+	host := strings.ToLower(parts[0])
+	if host != "wsl$" && host != "wsl.localhost" {
+		return PathTranslation{}, false
+	}
+
+	distro := parts[1]
+	rest := "/"
+	if len(parts) > 2 {
+		rest = "/" + strings.Join(parts[2:], "/")
+	}
+
+	return PathTranslation{WSLPath: rest, Distro: distro}, true
+}
+
+type noopDriveRemoteResolver struct{}
+
+func (noopDriveRemoteResolver) Resolve(string) (string, bool, error) {
+	return "", false, nil
 }

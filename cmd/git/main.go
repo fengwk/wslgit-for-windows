@@ -36,9 +36,13 @@ func run(config bridge.Config, logger *bridge.DebugLogger) error {
 
 	logger.Printf("original cwd=%q raw args=%q", cwd, os.Args[1:])
 
-	wslCWD, err := bridge.WindowsPathToWSL(cwd)
+	translation, err := bridge.ResolvePathTranslation(cwd)
 	if err != nil {
 		return fmt.Errorf("当前目录不受支持，请将仓库放在本机盘符路径下: %w", err)
+	}
+	wslCWD := translation.WSLPath
+	if config.Distro == "" && translation.Distro != "" {
+		config.Distro = translation.Distro
 	}
 
 	rewrittenArgs := bridge.RewriteArgs(os.Args[1:], cwd, bridge.OSPathChecker{})

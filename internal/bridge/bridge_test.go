@@ -1,11 +1,21 @@
 package bridge
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 type fakeChecker map[string]bool
 
+type fakeDriveResolver map[string]string
+
 func (f fakeChecker) Exists(path string) bool {
 	return f[path]
+}
+
+func (f fakeDriveResolver) Resolve(drive string) (string, bool, error) {
+	remote, ok := f[drive]
+	return remote, ok, nil
 }
 
 func TestWindowsPathToWSL(t *testing.T) {
@@ -29,6 +39,46 @@ func TestWindowsPathToWSL(t *testing.T) {
 				t.Fatalf("got %q want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestResolvePathTranslationMappedWSLDrive(t *testing.T) {
+	translation, err := resolvePathTranslation(`X:\home\fengwk\proj\bro-cli`, fakeDriveResolver{
+		`X:`: `\\wsl.localhost\Ubuntu-24.04`,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if translation.WSLPath != "/home/fengwk/proj/bro-cli" {
+		t.Fatalf("got path %q", translation.WSLPath)
+	}
+	if translation.Distro != "Ubuntu-24.04" {
+		t.Fatalf("got distro %q", translation.Distro)
+	}
+}
+
+func TestResolvePathTranslationUNCWSLPath(t *testing.T) {
+	translation, err := resolvePathTranslation(`\\wsl$\Ubuntu-24.04\home\fengwk\repo`, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if translation.WSLPath != "/home/fengwk/repo" {
+		t.Fatalf("got path %q", translation.WSLPath)
+	}
+	if translation.Distro != "Ubuntu-24.04" {
+		t.Fatalf("got distro %q", translation.Distro)
+	}
+}
+
+func TestResolvePathTranslationRejectsNonWSLMappedDrive(t *testing.T) {
+	_, err := resolvePathTranslation(`Z:\repo`, fakeDriveResolver{
+		`Z:`: `\\server\share`,
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), `仅支持映射到 \\wsl$ 或 \\wsl.localhost`) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
